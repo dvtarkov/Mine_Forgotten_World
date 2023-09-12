@@ -1,0 +1,97 @@
+version: "3.9"
+
+services:
+  site_app:
+    build:
+      dockerfile: ./mine_forgotten/Dockerfile
+
+    restart: on-failure
+
+    expose:
+      - 8000
+    ports:
+      - "8000:8000"
+    env_file:
+      - prod.env
+    depends_on:
+      - mfw_db
+    volumes:
+      - ./mine_forgotten/:/srv/www/mine_forgotten
+      - mine_forgotten_data:/app_data
+    command: sh -c "python manage.py makemigrations && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+#    logging:
+#      driver: loki
+#      options:
+#        loki-url: http://localhost:3100/loki/api/v1/push
+
+
+  mfw_db:
+    image: postgres
+    restart: on-failure
+
+    volumes:
+      - /usr/local/var/postgres:/var/lib/postgres/data/pgdata
+    env_file:
+      - prod.env
+    expose:
+      - 5432
+    environment:
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: mfw_db
+      POSTGRES_USER: mfw
+      POSTGRES_HOST: mfw_db
+      POSTGRES_PORT: 5432
+
+
+  grafana:
+    image: grafana/grafana:9.2.15
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - /var/lib/grafana/logs/
+  loki:
+    image: grafana/loki:2.8.0
+    ports:
+      - "3100:3100"
+    expose:
+      - "3100"
+    volumes:
+      - loki_data:/etc/loki
+      - loki_data:/var/lib/loki
+
+
+  nginx:
+      image: nginx:latest
+
+      restart: always
+      ports:
+        - "80:80"
+        - "30:30"
+      expose:
+        - 8080
+        - 30
+      volumes:
+        - ./Datify/static:/srv/www/mine_forgotten/static
+        - ./Datify/media:/srv/www/mine_forgotten/media
+        - ./Datify/logs:/srv/www/mine_forgotten/logs
+        - ./docker/nginx:/etc/nginx/conf.d
+      depends_on:
+        - site_app
+
+
+  minecraft-server:
+    build: ./server/
+    ports:
+      - "25565:25565"
+
+    volumes:
+      - ./server/:/srv/www/minecraft-server/
+
+    command: sh run.sh
+
+
+volumes:
+  grafana_data:
+  loki_data:
+  mine_forgotten_data:
